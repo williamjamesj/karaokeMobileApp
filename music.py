@@ -1,10 +1,11 @@
 import json
 import os
 import requests
-from string import Template # Used for having a template for GET API requests.
+import xml.etree.ElementTree as ElementTree # Used to process the XML reponse, given by the ChartLyrics API.
+
 
 urls = {"geniusSearch":"https://genius.p.rapidapi.com/search",
-        "chartLyrics":Template("http://api.chartlyrics.com/apiv1.asmx/SearchLyricDirect?artist=$artist&song=$title"),
+        "chartLyrics":"http://api.chartlyrics.com/apiv1.asmx/SearchLyricDirect",
         }
 
 def retriveSong(lyrics):
@@ -20,7 +21,17 @@ def retriveSong(lyrics):
         data = response["response"]["hits"][0]["result"]
         print("Song Name:",data["title"])
         print("Artist(s)", data["artist_names"])
+    else:
+        print("Something went wrong.")
     return(response)
 
-def get_lyrics():
-    pass
+def getChartLyrics(title, artist):
+    response = requests.get(urls["chartLyrics"], params={"artist":artist, "song":title})
+    lyrics = ""
+    if response.status_code == 200:
+        data = ElementTree.fromstring(response.text)
+        for lyric in data.iter("{http://api.chartlyrics.com/}Lyric"): # Iterate through the XML response, finding all of the lyrics, of which there should only be one.
+            lyrics = lyric.text
+    else:
+        print("Something went wrong.")
+    return lyrics
