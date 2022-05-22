@@ -7,6 +7,7 @@ from music import retriveSong, getChartLyrics
 from passlib.hash import sha256_crypt
 from dotenv import load_dotenv
 import time
+import pyotp
 
 load_dotenv()
 
@@ -29,16 +30,35 @@ def login(): # This login is used when the user does not already have an issued 
         print(request.get_json())
         userDetails = DATABASE.ViewQuery("SELECT * FROM users where email = ?", (email,))
         if userDetails and sha256_crypt.verify(password, userDetails[0]['password']):
-            time.sleep(5)
+            time.sleep(1) # Gives time for react native to do animations, TESTING ONLY.
             userID = userDetails[0]["userID"]
-            name = userDetails[0]["name"]
-            session["userID"] = userID
-            return(jsonify({"status":"authenticated", "userID":userID, "name":name}))
+            if userDetails[0]['OTPCode'] != None:
+                session["tempUserID"] = userID # Temporarily assign the userID to the session, which still prevents any use, but allows the user to proceed to the 2fa challenge.
+                return jsonify({"status": "2fa"})
+            else:
+                name = userDetails[0]["name"]
+                session["userID"] = userID
+                return(jsonify({"status":"authenticated", "userID":userID, "name":name}))
         else:
             return(jsonify({"status":"Invalid Credentials"}))
     return jsonify({})
 
+@app.route("/2fa", methods=["GET","POST"])
+def twofactor():
+    if request.method == "POST":
+        code = request.get_json()["code"]
+        userID = session["tempUserID"]
+        userDetails = DATABASE.ViewQuery("SELECT * FROM users where userID = ?", (userID,))
+        OTPCode = userDetails[0]['OTPCode']
+        print(code)
+        if pyotp.TOTP(OTPCode).verify(code):
+            session["userID"] = userID
+            return(jsonify({"status":"authenticated"}))
+        else:
+            return(jsonify({"status":"Invalid Code"}))
+    return jsonify({})
 
+    
 # retriveSong("Lyrics.")
 # print(getLyrics("", ""))
 
