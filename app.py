@@ -1,9 +1,10 @@
+from click import getchar
 from flask import Flask, render_template, session, request, redirect, flash, url_for, jsonify, Response, logging
 from databaseinterface import Database
 import json
 import os
 from flask_cors import CORS
-from music import retriveSong, getChartLyrics
+from music import retriveSong, getChartLyrics, getPowerLyrics, getLyrics
 from passlib.hash import sha256_crypt
 from dotenv import load_dotenv
 import time
@@ -28,10 +29,8 @@ def login(): # This login is used when the user does not already have an issued 
         credentials = request.get_json() # Doesn't use a form, uses JSON.
         email = credentials["email"]
         password = credentials["password"]
-        print(request.get_json())
         userDetails = DATABASE.ViewQuery("SELECT * FROM users where email = ?", (email,))
         if userDetails and sha256_crypt.verify(password, userDetails[0]['password']):
-            time.sleep(1) # Gives time for react native to do animations, TESTING ONLY.
             userID = userDetails[0]["userID"]
             if userDetails[0]['OTPCode'] != None:
                 session["tempUserID"] = userID # Temporarily assign the userID to the session, which still prevents any use, but allows the user to proceed to the 2fa challenge.
@@ -53,7 +52,6 @@ def issue_token(userID):
     
 @app.route("/token_login", methods=["GET","POST"])
 def tokenLogin(): # This login is used when the user already has an issued token.
-    time.sleep(5)
     if request.method == "POST":
         token = request.get_json()["token"]
         userDetails = DATABASE.ViewQuery("SELECT * FROM users INNER JOIN tokens on users.userID = tokens.userID WHERE tokens.token = ?", (token,))
@@ -69,7 +67,6 @@ def twoFactor():
         userID = session["tempUserID"]
         userDetails = DATABASE.ViewQuery("SELECT * FROM users where userID = ?", (userID,))
         OTPCode = userDetails[0]['OTPCode']
-        print(code)
         if pyotp.TOTP(OTPCode).verify(code):
             session["userID"] = userID
             token = issue_token(userID)
@@ -78,9 +75,33 @@ def twoFactor():
             return(jsonify({"status":"Invalid Code"}))
     return jsonify({})
 
-    
-# retriveSong("Lyrics.")
-# print(getLyrics("", ""))
+@app.route("/get_lyrics", methods=["GET","POST"])
+def retrieveLyrics():
+    if request.method == "POST":
+        response = request.get_json()
+        song = response["song"]
+        artist = response["artist"]
+        lyrics = getLyrics(song, artist)
+        if lyrics:
+            return(jsonify({"status":"success","lyrics":lyrics}))
+        else:
+            return(jsonify({"status":"failed"}))
+    return jsonify({})
+
+@app.route("/find_song", methods=["GET","POST"])
+def findSong():
+    if request.method == "POST":
+        lyrics = request.get_json()["lyrics"]
+        if lyrics != "":
+            song = retriveSong(lyrics)
+            if song:
+                return(jsonify({"status":"success","song":song}))
+            else:
+                return(jsonify({"status":"Song Not Found."}))
+        else:
+            return(jsonify({"status":"No Lyrics."}))
+    return(jsonify({}))
 
 if __name__ == '__main__':
+    # print(getPowerLyrics("radioactive", "imagine dragons"))
     app.run(host='0.0.0.0', port=5000)
