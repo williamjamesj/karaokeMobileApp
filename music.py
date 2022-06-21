@@ -18,9 +18,13 @@ def retriveSong(lyrics):
     response = requests.request("GET", urls["geniusSearch"], headers=headers, params=queryString)
     response = json.loads(response.text)
     if response["meta"]["status"] == 200:
-        data = response["response"]["hits"][0]["result"]
-        print("Song Name:",data["title"])
-        print("Artist(s)", data["artist_names"])
+        subset = response["response"]["hits"]
+        if len(subset):
+            data = response["response"]["hits"][0]["result"]
+            print("Song Name:",data["title"])
+            print("Artist(s)", data["artist_names"])
+        else:
+            print("No songs found.")
     else:
         print("Something went wrong.")
     return(response)

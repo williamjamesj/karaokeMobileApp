@@ -63,6 +63,9 @@ def tokenLogin(): # This login is used when the user already has an issued token
 @app.route("/2fa", methods=["GET","POST"])
 def twoFactor():
     if request.method == "POST":
+        if "tempUserID" not in session:
+            print("No tempUserID")
+            return jsonify({})
         code = request.get_json()["code"]
         userID = session["tempUserID"]
         userDetails = DATABASE.ViewQuery("SELECT * FROM users where userID = ?", (userID,))
@@ -78,6 +81,7 @@ def twoFactor():
 @app.route("/get_lyrics", methods=["GET","POST"])
 def retrieveLyrics():
     if request.method == "POST":
+        time.sleep(2)
         response = request.get_json()
         song = response["song"]
         artist = response["artist"]
