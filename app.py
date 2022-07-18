@@ -18,6 +18,16 @@ app.secret_key = os.environ['SECRET_KEY']
 app.config.from_object(__name__)
 CORS(app)
 DATABASE = Database(os.environ['DATABASE_URL'])
+EXEMPT_PATHS = ["/", "/login","/2fa","/favicon.ico", "/token_login"] # All of the paths that are not protected by authentication.
+
+
+# Before accessing ANY page (other than sign in pages), check if the user is logged in, as there is no public facing functionality for this website.
+@app.before_request
+def check_login():
+    exempt_page = request.path in EXEMPT_PATHS or request.path.startswith("/static") # Check if it is one of the pages that is allowed (login and 2fa especially, to avoid a loop) or if it is a static file.
+    logged_in = 'userid' in session
+    if not (logged_in or exempt_page): # To access a page, the user must either be logged in or be accessing a resource that does not require authentication.
+        return redirect("/") # Redirect to the login if the user has not logged in.
 
 @app.route("/")
 def index():
@@ -104,6 +114,20 @@ def findSong():
                 return(jsonify({"status":"Song Not Found."}))
         else:
             return(jsonify({"status":"No Lyrics."}))
+    return(jsonify({}))
+
+@app.route("/create_event", methods=["GET","POST"])
+def createEvent():
+    if request.method == "POST":
+        event = request.get_json()
+        creatorID = session["userID"]
+        latitude = event["latitude"]
+        longitude = event["longitude"]
+        startTime = event["startTime"]
+        title = event["title"]
+        description = event["description"]
+        eventID = DATABASE.ModifyQuery("INSERT INTO events (creatorID, latitude, longitude, startTime, title, description) VALUES (?, ?, ?, ?, ?, ?)", (creatorID, latitude, longitude, startTime, title, description))
+        return(jsonify({"status":"success","eventID":eventID}))
     return(jsonify({}))
 
 if __name__ == '__main__':
