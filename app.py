@@ -18,7 +18,7 @@ app.secret_key = os.environ['SECRET_KEY']
 app.config.from_object(__name__)
 CORS(app)
 DATABASE = Database(os.environ['DATABASE_URL'])
-EXEMPT_PATHS = ["/", "/login","/2fa","/favicon.ico", "/token_login"] # All of the paths that are not protected by authentication.
+EXEMPT_PATHS = ["/", "/login","/2fa","/favicon.ico", "/token_login", "/register"] # All of the paths that are not protected by authentication.
 
 
 # Before accessing ANY page (other than sign in pages), check if the user is logged in, as there is no public facing functionality for this website.
@@ -58,6 +58,26 @@ def login(): # This login is used when the user does not already have an issued 
         else:
             return(jsonify({"status":"Invalid Credentials"}))
     return jsonify({})
+
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    if request.method == "POST":
+        credentials = request.get_json()
+        print(credentials)
+        checkEmail = DATABASE.ViewQuery("SELECT * FROM users WHERE email = ?", (credentials["email"],))
+        if checkEmail:
+            return(jsonify({"status":"emailDuplication"}))
+        checkUsername = DATABASE.ViewQuery("SELECT * FROM users WHERE name = ?", (credentials["username"],))
+        if checkUsername:
+            return(jsonify({"status":"usernameDuplication"}))
+        password = sha256_crypt.hash(credentials["password"]) # If no duplication of either usernames or emails are found, encrypt the password and insert the user into the database.
+        insertSuccess = DATABASE.ModifyQuery("INSERT INTO users (name, email, password) VALUES (?, ?, ?)", (credentials["username"], credentials["email"], password))
+        if insertSuccess:
+            userID = DATABASE.ViewQuery("SELECT * FROM users WHERE email = ?", (credentials["email"],))[0]["userID"]
+            token = issue_token(userID)
+            return(jsonify({"status":"authenticated", "userID":userID, "token":token}))
+        else:
+            return(jsonify({"status":"failed"}))
 
 def issue_token(userID):
     token = secrets.token_urlsafe(32)
