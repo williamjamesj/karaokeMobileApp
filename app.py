@@ -18,6 +18,8 @@ app.secret_key = os.environ['SECRET_KEY']
 app.config.from_object(__name__)
 CORS(app)
 DATABASE = Database(os.environ['DATABASE_URL'])
+FILE_STORAGE = os.path.join(os.path.dirname(os.path.abspath(__file__)),"filestorage/")
+app.config["UPLOAD_FOLDER"] = FILE_STORAGE
 EXEMPT_PATHS = ["/", "/login","/2fa","/favicon.ico", "/token_login", "/register"] # All of the paths that are not protected by authentication.
 
 
@@ -42,9 +44,9 @@ def index():
 def login(): # This login is used when the user does not already have an issued token.
     if request.method == "POST": # The react mobile app will send the user's credentials as a JSON object over POST. 
         credentials = request.get_json() # Doesn't use a form, uses JSON.
-        email = credentials["email"]
+        emailUsername = credentials["emailUsername"]
         password = credentials["password"]
-        userDetails = DATABASE.ViewQuery("SELECT * FROM users where email = ?", (email,))
+        userDetails = DATABASE.ViewQuery("SELECT * FROM users WHERE email = ? OR name = ?", (emailUsername, emailUsername))
         if userDetails and sha256_crypt.verify(password, userDetails[0]['password']):
             userID = userDetails[0]["userID"]
             if userDetails[0]['OTPCode'] != None:
@@ -58,6 +60,23 @@ def login(): # This login is used when the user does not already have an issued 
         else:
             return(jsonify({"status":"Invalid Credentials"}))
     return jsonify({})
+
+@app.route("/upload_audio", methods=["POST"])
+def upload_audio():
+    if request.method == "POST":
+        if 'file' not in request.files:
+            print("No file part")
+            return jsonify({"status":"error"})
+        title = request.form.get("title")
+        description = request.form.get("description")
+        print(title,description)
+        file = request.files['file']
+        if file.filename != '':
+            filename = file.filename
+            if filename.endswith((".mp3", ".wav", ".flac", ".aac", ".m4a", ".ogg", ".wma")):
+                file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                return jsonify({"status":"success"})
+    return jsonify({"status":"error"})
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
