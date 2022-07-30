@@ -1,5 +1,6 @@
 from click import getchar
 from flask import Flask, render_template, session, request, redirect, flash, url_for, jsonify, Response, logging
+from werkzeug.utils import secure_filename
 from databaseinterface import Database
 import json
 import os
@@ -69,13 +70,28 @@ def upload_audio():
             return jsonify({"status":"error"})
         title = request.form.get("title")
         description = request.form.get("description")
+        visibility = request.form.get("visibility")
         print(title,description)
         file = request.files['file']
         if file.filename != '':
             filename = file.filename
             if filename.endswith((".mp3", ".wav", ".flac", ".aac", ".m4a", ".ogg", ".wma")):
-                file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                number = DATABASE.ViewQuery("SELECT MAX(fileID) AS filename FROM files")[0]["filename"]
+                if not number:
+                    number = 0
+                filename = secure_filename(str(number)+"."+filename.split(".")[-1])
+                print(filename)
+                try:
+                    file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                except Exception as e:
+                    print(e)
+                    return({"status":"error saving file"})
+                DATABASE.ModifyQuery("INSERT INTO files (filename) VALUES (?)", (filename,))
+                fileID = DATABASE.ViewQuery("SELECT fileID FROM files WHERE filename = ?", (filename,))[0]["fileID"]
+                DATABASE.ModifyQuery("INSERT INTO snippets (title, author, description, fileID, visibility) VALUES (?,?,?,?,?)", (title, session["userID"], description, fileID, visibility))
                 return jsonify({"status":"success"})
+            else:
+                return jsonify({"status":"unsupported format"})
     return jsonify({"status":"error"})
 
 @app.route("/register", methods=["GET", "POST"])
