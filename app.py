@@ -71,6 +71,11 @@ def upload_audio():
         title = request.form.get("title")
         description = request.form.get("description")
         visibility = request.form.get("visibility")
+        if visibility == "true":
+            print("visible")
+            visibility = 1
+        else: 
+            visibility = 0
         print(title,description)
         file = request.files['file']
         if file.filename != '':
@@ -93,6 +98,26 @@ def upload_audio():
             else:
                 return jsonify({"status":"unsupported format"})
     return jsonify({"status":"error"})
+
+@app.route("/snippets", methods=["GET", "POST"])
+def snippetData():
+    if request.method == "POST":
+        snippetID = request.get_json()["snippetID"]
+        print(snippetID)
+        snippetData = DATABASE.ViewQuery("SELECT snippets.snippetID, title, author, description, name, COUNT(interactions.like) AS likes, COUNT(interactions.comment) AS comments, COUNT(interactions.view) AS views, comment FROM (snippets INNER JOIN users ON snippets.author = users.userID) LEFT JOIN interactions ON interactions.snippetID = snippets.snippetID WHERE snippets.snippetID = ?", (snippetID,))
+        if not snippetData[0]["visibility"]:
+            return(jsonify({"status":"private"}))
+        return jsonify(snippetData)
+    return(jsonify({}))
+
+@app.route("/snippetsList", methods=["GET", "POST"])
+def snippetList():
+    if request.method == "POST":
+        print("post")
+        snippetData = DATABASE.ViewQuery("SELECT snippets.snippetID, title, author, description, name, COUNT(interactions.like) AS likes, COUNT(interactions.comment) AS comments, COUNT(interactions.view) AS views FROM (snippets INNER JOIN users ON snippets.author = users.userID) LEFT JOIN interactions ON interactions.snippetID = snippets.snippetID WHERE visibility = 1 GROUP BY snippets.snippetID") # Returns all of the snippets, which is not a long term solution as it could be a very large list. Pagination would be a good solution.
+        print(snippetData)
+        return jsonify(snippetData)
+    return(jsonify({}))
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
