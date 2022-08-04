@@ -1,5 +1,4 @@
-from click import getchar
-from flask import Flask, render_template, session, request, redirect, flash, url_for, jsonify, Response, logging
+from flask import Flask, render_template, session, request, redirect, flash, url_for, jsonify, Response, logging, send_from_directory
 from werkzeug.utils import secure_filename
 from databaseinterface import Database
 import json
@@ -31,11 +30,21 @@ def check_login():
     for i in session:
         print(i)
     logged_in = 'userID' in session
-    if not (logged_in or exempt_page): # To access a page, the user must either be logged in or be accessing a resource that does not require authentication.
+    if not (logged_in or exempt_page or True): # To access a page, the user must either be logged in or be accessing a resource that does not require authentication.
         print("redirect")
         return redirect("/") # Redirect to the login if the user has not logged in
     else:
         print(request.path)
+
+@app.route("/snippets/<snippetID>")
+def uploaded_file(snippetID): # Checks if a snippet is private, and if not, serves it to the user.
+    snippetData = DATABASE.ViewQuery("SELECT * FROM snippets INNER JOIN files ON snippets.fileID = files.fileID WHERE snippetID = ?", (snippetID,))
+    if not snippetData:
+        return jsonify({"error": "Snippet not found"})
+    visibility = snippetData[0]["visibility"]
+    if visibility == "1":
+        return send_from_directory(app.config["UPLOAD_FOLDER"], snippetData[0]["filename"])
+    return jsonify({"error": "This snippet is not public."})
 
 @app.route("/")
 def index():
@@ -104,10 +113,14 @@ def snippetData():
     if request.method == "POST":
         snippetID = request.get_json()["snippetID"]
         print(snippetID)
-        snippetData = DATABASE.ViewQuery("SELECT snippets.snippetID, title, author, description, name, COUNT(interactions.like) AS likes, COUNT(interactions.comment) AS comments, COUNT(interactions.view) AS views, comment FROM (snippets INNER JOIN users ON snippets.author = users.userID) LEFT JOIN interactions ON interactions.snippetID = snippets.snippetID WHERE snippets.snippetID = ?", (snippetID,))
-        if not snippetData[0]["visibility"]:
+        snippetData = DATABASE.ViewQuery("SELECT snippets.snippetID, title, author, visibility, description, name, COUNT(interactions.like) AS likes, COUNT(interactions.comment) AS comments, COUNT(interactions.view) AS views FROM (snippets INNER JOIN users ON snippets.author = users.userID) LEFT JOIN interactions ON interactions.snippetID = snippets.snippetID WHERE snippets.snippetID = ?", (snippetID,))
+        comments = DATABASE.ViewQuery("SELECT interactionID, users.userID, comment, name FROM interactions INNER JOIN users ON interactions.userID = users.userID WHERE interactions.snippetID = ? AND comment NOT null", (snippetID,))
+        print(snippetData)
+        print(comments)
+        if snippetData[0]["visibility"] != "1" and not snippetData[0]["visibility"] != "1":
+            print("Private")
             return(jsonify({"status":"private"}))
-        return jsonify(snippetData)
+        return jsonify({"snippetData":snippetData, "comments":comments})
     return(jsonify({}))
 
 @app.route("/snippetsList", methods=["GET", "POST"])
@@ -213,6 +226,30 @@ def createEvent():
         description = event["description"]
         eventID = DATABASE.ModifyQuery("INSERT INTO events (creatorID, latitude, longitude, startTime, title, description) VALUES (?, ?, ?, ?, ?, ?)", (creatorID, latitude, longitude, startTime, title, description))
         return(jsonify({"status":"success","eventID":eventID}))
+    return(jsonify({}))
+
+@app.route("/submit_comment", methods=["GET","POST"])
+def submitComments():
+    if request.method == "POST":
+        comment = request.get_json()
+        userID = session["userID"]
+        snippetID = comment["snippetID"]
+        commentText = comment["commentText"]
+        commentID = DATABASE.ModifyQuery("INSERT INTO interactions (userID, snippetID, comment) VALUES (?, ?, ?)", (userID, snippetID, commentText))
+        return(jsonify({"status":"success"}))
+    return(jsonify({}))
+
+@app.route("/like_snippet", methods=["GET","POST"])
+def likeComment():
+    if request.method == "POST":
+        like = request.get_json()
+        userID = session["userID"]
+        snippetID = like["snippetID"]
+        interactions = DATABASE.ViewQuery("SELECT * FROM interactions WHERE userID = ? AND snippetID = ? AND like NOT null", (userID, snippetID))
+        if interactions:
+            return(jsonify({"status":"alreadyLiked"}))
+        DATABASE.ModifyQuery("INSERT INTO interactions (userID, snippetID, like) VALUES (?, ?, ?)", (userID, snippetID, 1))
+        return(jsonify({"status":"success"}))
     return(jsonify({}))
 
 if __name__ == '__main__':
