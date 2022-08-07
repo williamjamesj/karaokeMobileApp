@@ -117,9 +117,9 @@ def snippetData():
         comments = DATABASE.ViewQuery("SELECT interactionID, users.userID, comment, name FROM interactions INNER JOIN users ON interactions.userID = users.userID WHERE interactions.snippetID = ? AND comment NOT null", (snippetID,))
         print(snippetData)
         print(comments)
-        if snippetData[0]["visibility"] != "1" and not snippetData[0]["visibility"] != "1":
-            print("Private")
+        if snippetData[0]["visibility"] != "1" and not snippetData[0]["visibility"] != "1": # If the snippet is not public, prevent a user from seeing it.
             return(jsonify({"status":"private"}))
+        DATABASE.ModifyQuery("INSERT INTO interactions (snippetID, view) VALUES (?,?)", (snippetID, 1)) # When the user requests data about a snippet, it is considered to be a view.
         return jsonify({"snippetData":snippetData, "comments":comments})
     return(jsonify({}))
 
@@ -224,8 +224,46 @@ def createEvent():
         startTime = event["startTime"]
         title = event["title"]
         description = event["description"]
+        print(startTime)
         eventID = DATABASE.ModifyQuery("INSERT INTO events (creatorID, latitude, longitude, startTime, title, description) VALUES (?, ?, ?, ?, ?, ?)", (creatorID, latitude, longitude, startTime, title, description))
         return(jsonify({"status":"success","eventID":eventID}))
+    return(jsonify({}))
+
+@app.route("/events_list", methods=["GET","POST"])
+def eventsList():
+    if request.method == "POST":
+        events = DATABASE.ViewQuery("SELECT * FROM events")
+        return(jsonify({"status":"success","events":events}))
+    return(jsonify({}))
+
+@app.route("/event_details", methods=["GET","POST"])
+def eventDetails():
+    if request.method == "POST":
+        eventID = request.get_json()["eventID"]
+        DATABASE.ModifyQuery("INSERT INTO interactions (eventID, userID, view) VALUES (?, ?, ?)", (eventID, session["userID"], 1)) # Register the view, then retrieve, so the view is counted towards the figure the user sees.
+        eventDetails = DATABASE.ViewQuery("SELECT events.eventID, creatorID, latitude, longitude, startTime, title, description, name, COUNT(like) AS likes, COUNT(view) AS views FROM (events INNER JOIN users ON events.creatorID = users.userID) LEFT JOIN interactions ON events.eventID = interactions.eventID WHERE events.eventID = ?", (eventID,))
+        return(jsonify({"status":"success","event":eventDetails[0]}))
+    return(jsonify({}))
+
+@app.route("/event_like", methods=["GET","POST"])
+def eventLike():
+    if request.method == "POST":
+        eventID = request.get_json()["eventID"]
+        userID = session["userID"]
+        likeCheck = DATABASE.ViewQuery("SELECT * FROM interactions WHERE eventID = ? AND userID = ? AND like = 1", (eventID, userID))
+        print(likeCheck)
+        if likeCheck:
+            return(jsonify({"status":"already liked"}))
+        DATABASE.ModifyQuery("INSERT INTO interactions (eventID, userID, like) VALUES (?, ?, ?)", (eventID, userID, 1))
+        return(jsonify({"status":"success"}))
+
+@app.route("/user_events", methods=["GET","POST"])
+def userEvents():
+    if request.method == "POST":
+        userID = session["userID"]
+        events = DATABASE.ViewQuery("SELECT title, description, startTime, COUNT(view) AS views, COUNT(like) AS likes, name FROM (events INNER JOIN interactions on events.eventID = interactions.eventID) INNER JOIN users on users.userID = events.creatorID WHERE (like = 1 AND interactions.userID = ?) OR creatorID = ? GROUP BY events.eventID", (userID, userID))
+        print(events)
+        return(jsonify({"status":"success","events": events}))
     return(jsonify({}))
 
 @app.route("/submit_comment", methods=["GET","POST"])
