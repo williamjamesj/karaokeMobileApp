@@ -261,7 +261,7 @@ def eventLike():
 def userEvents():
     if request.method == "POST":
         userID = session["userID"]
-        events = DATABASE.ViewQuery("SELECT title, description, startTime, COUNT(view) AS views, COUNT(like) AS likes, name FROM (events INNER JOIN interactions on events.eventID = interactions.eventID) INNER JOIN users on users.userID = events.creatorID WHERE (like = 1 AND interactions.userID = ?) OR creatorID = ? GROUP BY events.eventID", (userID, userID))
+        events = DATABASE.ViewQuery("SELECT events.eventID, title, description, startTime, COUNT(view) AS views, COUNT(like) AS likes, name FROM (events INNER JOIN interactions on events.eventID = interactions.eventID) INNER JOIN users on users.userID = events.creatorID WHERE (like = 1 AND interactions.userID = ?) OR creatorID = ? GROUP BY events.eventID", (userID, userID))
         print(events)
         return(jsonify({"status":"success","events": events}))
     return(jsonify({}))
