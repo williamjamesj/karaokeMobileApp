@@ -224,7 +224,6 @@ def createEvent():
         startTime = event["startTime"]
         title = event["title"]
         description = event["description"]
-        print(startTime)
         eventID = DATABASE.ModifyQuery("INSERT INTO events (creatorID, latitude, longitude, startTime, title, description) VALUES (?, ?, ?, ?, ?, ?)", (creatorID, latitude, longitude, startTime, title, description))
         return(jsonify({"status":"success","eventID":eventID}))
     return(jsonify({}))
