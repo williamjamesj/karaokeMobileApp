@@ -290,6 +290,32 @@ def likeComment():
         return(jsonify({"status":"success"}))
     return(jsonify({}))
 
+@app.route("/2fagenerate", methods=["GET","POST"])
+def twoFactorGenerate():
+    if request.method == "POST":
+        userID = session["userID"]
+        email = DATABASE.ViewQuery("SELECT email FROM users WHERE userID = ?", (userID,))[0]["email"]
+        secret = pyotp.random_base32()
+        url = pyotp.totp.TOTP(secret).provisioning_uri(email, issuer_name="singKaraoke")
+        print(url)
+        return(jsonify({"status":"success","secret":url, "actualSecret": secret}))
+    return(jsonify({}))
+
+@app.route("/2faconfirm", methods=["GET","POST"])
+def twoFactorConfig():
+    if request.method == "POST":
+        data = request.get_json()
+        code = data["code"]
+        secret = data["secret"]
+        if pyotp.TOTP(secret).verify(code):
+            DATABASE.ModifyQuery("UPDATE users SET OTPCode = ? WHERE userID = ?", (secret, session["userID"]))
+            return jsonify({"status":"success"})
+        else:
+            print("invalid token")
+            return jsonify({"status":"failed"})
+    return jsonify({})
+
+
 if __name__ == '__main__':
     # print(getPowerLyrics("radioactive", "imagine dragons"))
     app.run(host='0.0.0.0', port=5000)
