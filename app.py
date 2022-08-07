@@ -11,13 +11,14 @@ import time
 import secrets
 import pyotp
 
-load_dotenv()
+project_folder = os.path.expanduser('~/karaokeMobileApp')  # adjust as appropriate
+load_dotenv(os.path.join(project_folder, '.env'))
 
 app = Flask(__name__); app.debug = True
 app.secret_key = os.environ['SECRET_KEY']
 app.config.from_object(__name__)
 CORS(app)
-DATABASE = Database(os.environ['DATABASE_URL'])
+DATABASE = Database(os.path.join(project_folder, os.environ['DATABASE_URL']))
 FILE_STORAGE = os.path.join(os.path.dirname(os.path.abspath(__file__)),"filestorage/")
 app.config["UPLOAD_FOLDER"] = FILE_STORAGE
 EXEMPT_PATHS = ["/", "/login","/2fa","/favicon.ico", "/token_login", "/register"] # All of the paths that are not protected by authentication.
@@ -52,7 +53,7 @@ def index():
 
 @app.route("/login", methods=["GET","POST"])
 def login(): # This login is used when the user does not already have an issued token.
-    if request.method == "POST": # The react mobile app will send the user's credentials as a JSON object over POST. 
+    if request.method == "POST": # The react mobile app will send the user's credentials as a JSON object over POST.
         credentials = request.get_json() # Doesn't use a form, uses JSON.
         emailUsername = credentials["emailUsername"]
         password = credentials["password"]
@@ -83,7 +84,7 @@ def upload_audio():
         if visibility == "true":
             print("visible")
             visibility = 1
-        else: 
+        else:
             visibility = 0
         print(title,description)
         file = request.files['file']
@@ -157,7 +158,7 @@ def issue_token(userID):
     yearOfSeconds = 60*60*24*365 # 1 year in seconds, the default expiry for a user's token.
     DATABASE.ModifyQuery("INSERT INTO tokens (userID, token, expiry) VALUES (?, ?, ?)", (userID, token, time.time() + yearOfSeconds))
     return token # The client recieves the authentication token.
-    
+
 @app.route("/token_login", methods=["GET","POST"])
 def tokenLogin(): # This login is used when the user already has an issued token.
     if request.method == "POST":
